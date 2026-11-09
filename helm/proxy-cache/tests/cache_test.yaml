@@ -1,0 +1,169 @@
+suite: cachés zonales
+templates:
+  - templates/cache.yaml
+values:
+  - valores-prueba.yaml
+tests:
+  - it: crea un Deployment y un Service por cada zona de values.yaml
+    asserts:
+      - hasDocuments:
+          count: 8
+      - isKind:
+          of: Deployment
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: cache-cr
+        documentIndex: 0
+      - isKind:
+          of: Service
+        documentIndex: 7
+      - equal:
+          path: metadata.name
+          value: cache-gb
+        documentIndex: 7
+
+  - it: cada caché recibe su CACHE_ZONE
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CACHE_ZONE
+            value: CR
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: CACHE_ZONE
+            value: ES
+        documentIndex: 4
+
+  - it: pasa todas las variables que pide config.c sin valores quemados
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CACHE_PORT, value: "8080" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CACHE_TLS_PORT, value: "8443" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CACHE_DIR, value: /var/cache/zonal-cache }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: CONFIG_REFRESH_SECONDS, value: "30" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: UI_LOGIN_URL, value: https://ui.ejemplo.test/login }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: NODE_API_URL, value: https://api.ejemplo.test }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: TLS_CA_CERT_FILE, value: /etc/zonal-cache/rootCA.pem }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: TLS_CA_KEY_FILE, value: /etc/zonal-cache/rootCA-key.pem }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_API_KEY
+            valueFrom:
+              secretKeyRef: { name: RELEASE-NAME-llaves, key: cache }
+
+  - it: el disco es un emptyDir con límite y la CA sale de un Secret
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: disco
+            emptyDir: { sizeLimit: 1Gi }
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: ca
+            secret: { secretName: RELEASE-NAME-ca }
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content: { name: disco, mountPath: /var/cache/zonal-cache }
+
+  - it: el Service escucha la IP privada de la zona en 80 y 443 y conserva el IP del cliente
+    documentIndex: 3
+    asserts:
+      - equal:
+          path: spec.externalIPs
+          value: [10.20.1.12]
+      - equal:
+          path: spec.externalTrafficPolicy
+          value: Local
+      - contains:
+          path: spec.ports
+          content: { name: http, port: 80, targetPort: http }
+      - contains:
+          path: spec.ports
+          content: { name: https, port: 443, targetPort: https }
+      - equal:
+          path: spec.selector["proxy-cache/zona"]
+          value: US
+
+  - it: las zonas salen de values.yaml
+    set:
+      cache.zonas:
+        - { codigo: MX, externalIP: 10.0.0.5 }
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: cache-mx
+      - equal:
+          path: spec.externalIPs
+          value: [10.0.0.5]
+        documentIndex: 1
+
+  - it: la imagen sale del registro y la etiqueta de values.yaml
+    set:
+      imagenes.registro: 123.dkr.ecr.us-east-1.amazonaws.com/ic7602-p2
+      imagenes.etiqueta: abc123
+      imagenes.pullSecrets: [{ name: ecr }]
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: 123.dkr.ecr.us-east-1.amazonaws.com/ic7602-p2/zonal-cache:abc123
+      - equal:
+          path: spec.template.spec.imagePullSecrets
+          value: [{ name: ecr }]
+
+  - it: rechaza zonas repetidas
+    set:
+      cache.zonas:
+        - { codigo: CR, externalIP: 10.0.0.1 }
+        - { codigo: CR, externalIP: 10.0.0.2 }
+    asserts:
+      - failedTemplate:
+          errorPattern: "La zona CR está repetida"
+
+  - it: rechaza un código de zona mal escrito
+    set:
+      cache.zonas:
+        - { codigo: cr }
+    asserts:
+      - failedTemplate:
+          errorPattern: "dos letras en mayúscula"
+
+  - it: falla con un mensaje claro si falta el formulario de login
+    set:
+      cache.uiLoginUrl: ""
+    asserts:
+      - failedTemplate:
+          errorPattern: "Falta cache.uiLoginUrl"
+
+  - it: rechaza una URL del REST API que no es HTTP
+    set:
+      nodeApi.url: ftp://api.ejemplo.test
+    asserts:
+      - failedTemplate:
+          errorPattern: "nodeApi.url debe iniciar con http"

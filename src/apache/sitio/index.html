@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Origen Apache - IC7602 P2</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+    <main>
+        <img src="img/logo.png" alt="Logo del origen Apache" width="160" height="96">
+        <h1>Origen Apache</h1>
+        <p>
+            Este sitio lo sirve Apache (<code>httpd:2.4</code>) detrás de la Zonal Cache.
+            Trae un HTML, un CSS, un JS y una imagen para probar que la caché guarda
+            cada tipo de archivo con su propio TTL.
+        </p>
+        <table>
+            <thead>
+                <tr><th>Archivo</th><th>Tipo</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><a href="index.html">index.html</a></td><td>html</td></tr>
+                <tr><td><a href="css/estilos.css">css/estilos.css</a></td><td>css</td></tr>
+                <tr><td><a href="js/app.js">js/app.js</a></td><td>js</td></tr>
+                <tr><td><a href="img/logo.png">img/logo.png</a></td><td>png</td></tr>
+            </tbody>
+        </table>
+        <p id="estado">El JS todavía no corrió.</p>
+    </main>
+    <script src="js/app.js"></script>
+</body>
+</html>

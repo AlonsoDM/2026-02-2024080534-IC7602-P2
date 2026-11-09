@@ -1,0 +1,13 @@
+#ifndef INTERCEPTOR_FIXTURES_H
+#define INTERCEPTOR_FIXTURES_H
+
+#include <stdint.h>
+
+// La misma consulta A de las pruebas de dns.rs del P1.
+static const uint8_t STANDARD_A_QUERY[] = {
+    0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x07, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00,
+    0x00, 0x01, 0x00, 0x01
+};
+
+#endif

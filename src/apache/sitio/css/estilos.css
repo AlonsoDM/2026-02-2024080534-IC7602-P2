@@ -1,0 +1,36 @@
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: #f4f7fb;
+    color: #1f2933;
+}
+
+main {
+    max-width: 40rem;
+    margin: 3rem auto;
+    padding: 2rem;
+    background: #ffffff;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    color: #1f3a5f;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th,
+td {
+    border: 1px solid #d0d7e2;
+    padding: 0.4rem 0.6rem;
+    text-align: left;
+}
+
+#estado {
+    font-weight: bold;
+    color: #2e86c1;
+}

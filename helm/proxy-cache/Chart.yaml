@@ -1,0 +1,6 @@
+apiVersion: v2
+name: proxy-cache
+description: DNS Interceptor, una Zonal Cache por zona, el REST API Java y el Apache del Proyecto 2 de IC7602
+type: application
+version: 1.0.0
+appVersion: "1.0.0"

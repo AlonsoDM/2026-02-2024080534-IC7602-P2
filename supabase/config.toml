@@ -1,0 +1,8 @@
+project_id = "2026-02-ic7602-p2"
+
+[db]
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]

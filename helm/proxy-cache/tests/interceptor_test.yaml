@@ -1,0 +1,74 @@
+suite: DNS Interceptor
+templates:
+  - templates/interceptor.yaml
+values:
+  - valores-prueba.yaml
+tests:
+  - it: el contenedor escucha en un puerto alto y el Service expone 53/udp en la IP del nodo
+    asserts:
+      - hasDocuments:
+          count: 2
+      - contains:
+          path: spec.template.spec.containers[0].ports
+          content: { name: dns, containerPort: 5300, protocol: UDP }
+        documentIndex: 0
+      - equal:
+          path: spec.ports[0]
+          value: { name: dns, port: 53, targetPort: dns, protocol: UDP }
+        documentIndex: 1
+      - equal:
+          path: spec.externalIPs
+          value: [10.20.1.10]
+        documentIndex: 1
+
+  - it: conserva el IP del cliente para que la geolocalización funcione
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: spec.externalTrafficPolicy
+          value: Local
+
+  - it: pasa todas las variables que pide config.c
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: DNS_PORT, value: "5300" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: UPSTREAM_DNS, value: 8.8.8.8 }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: UPSTREAM_DNS_PORT, value: "53" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: UPSTREAM_TIMEOUT_SECONDS, value: "3" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: DNS_TTL_SECONDS, value: "60" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: NODE_API_TIMEOUT_SECONDS, value: "5" }
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: NODE_API_KEY
+            valueFrom:
+              secretKeyRef: { name: RELEASE-NAME-llaves, key: interceptor }
+
+  - it: sin externalIPs no pide externalTrafficPolicy, que Kubernetes rechazaría
+    set:
+      interceptor.externalIPs: []
+    documentIndex: 1
+    asserts:
+      - notExists:
+          path: spec.externalIPs
+      - notExists:
+          path: spec.externalTrafficPolicy
+
+  - it: se puede desactivar
+    set:
+      interceptor.habilitado: false
+    asserts:
+      - hasDocuments:
+          count: 0

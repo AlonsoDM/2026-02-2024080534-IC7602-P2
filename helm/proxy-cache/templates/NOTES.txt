@@ -1,0 +1,12 @@
+Instalado {{ .Release.Name }} en el namespace {{ .Release.Namespace }}.
+
+{{- if .Values.interceptor.habilitado }}
+DNS Interceptor: {{ join ", " (default (list "sin externalIPs") .Values.interceptor.externalIPs) }} puerto {{ .Values.interceptor.puertoServicio }}/udp
+{{- end }}
+Cachés zonales:
+{{- range .Values.cache.zonas }}
+  {{ .codigo }}: cache-{{ lower .codigo }} en {{ default "sin externalIP" .externalIP }} (80 y 443)
+{{- end }}
+
+Ver los pods:  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+Ver un log:    kubectl logs -n {{ .Release.Namespace }} deploy/<interceptor, cache-cr, java-api o apache>

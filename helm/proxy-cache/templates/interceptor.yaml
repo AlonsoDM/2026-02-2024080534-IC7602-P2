@@ -1,0 +1,82 @@
+{{- if .Values.interceptor.habilitado }}
+{{- $v := .Values.interceptor }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: interceptor
+  labels:
+    {{- include "proxy-cache.etiquetas" . | nindent 4 }}
+    app.kubernetes.io/name: interceptor
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: interceptor
+  template:
+    metadata:
+      labels:
+        {{- include "proxy-cache.etiquetas" . | nindent 8 }}
+        app.kubernetes.io/name: interceptor
+      annotations:
+        # Si cambian las llaves, el pod se reinicia con las nuevas
+        checksum/llaves: {{ toJson .Values.llaves | sha256sum }}
+    spec:
+      {{- include "proxy-cache.pullSecrets" . | nindent 6 }}
+      containers:
+        - name: interceptor
+          image: {{ include "proxy-cache.imagen" (dict "raiz" . "nombre" $v.imagen) }}
+          imagePullPolicy: {{ .Values.imagenes.pullPolicy }}
+          ports:
+            - name: dns
+              containerPort: {{ $v.puerto }}
+              protocol: UDP
+          env:
+            - name: DNS_PORT
+              value: {{ $v.puerto | quote }}
+            - name: UPSTREAM_DNS
+              value: {{ $v.upstreamDns | quote }}
+            - name: UPSTREAM_DNS_PORT
+              value: {{ $v.upstreamDnsPort | quote }}
+            - name: UPSTREAM_TIMEOUT_SECONDS
+              value: {{ $v.upstreamTimeoutSeconds | quote }}
+            - name: DNS_TTL_SECONDS
+              value: {{ $v.dnsTtlSeconds | quote }}
+            - name: NODE_API_URL
+              value: {{ include "proxy-cache.nodeApiUrl" . | quote }}
+            - name: NODE_API_TIMEOUT_SECONDS
+              value: {{ .Values.nodeApi.timeoutSeconds | quote }}
+            - name: NODE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "proxy-cache.secretoLlaves" . }}
+                  key: interceptor
+          {{- with $v.recursos }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: interceptor
+  labels:
+    {{- include "proxy-cache.etiquetas" . | nindent 4 }}
+    app.kubernetes.io/name: interceptor
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: interceptor
+  {{- with $v.externalIPs }}
+  externalIPs:
+    {{- toYaml . | nindent 4 }}
+  # Sin esto kube-proxy cambia el IP de origen por el del nodo y el Interceptor no sabría el país del cliente
+  externalTrafficPolicy: Local
+  {{- end }}
+  ports:
+    - name: dns
+      port: {{ $v.puertoServicio }}
+      targetPort: dns
+      protocol: UDP
+{{- end }}

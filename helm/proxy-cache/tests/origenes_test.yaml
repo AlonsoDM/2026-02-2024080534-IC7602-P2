@@ -1,0 +1,61 @@
+suite: orígenes propios
+templates:
+  - templates/java-api.yaml
+  - templates/apache.yaml
+values:
+  - valores-prueba.yaml
+tests:
+  - it: el Service del API Java se llama java-api y escucha en 8080, como los orígenes de Supabase
+    template: templates/java-api.yaml
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: metadata.name
+          value: java-api
+      - equal:
+          path: spec.ports[0].port
+          value: 8080
+
+  - it: el API Java recibe su puerto por JAVA_API_PORT y se revisa con /health
+    template: templates/java-api.yaml
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: JAVA_API_PORT, value: "8080" }
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /health
+
+  - it: el Service del Apache se llama apache y escucha en 80
+    template: templates/apache.yaml
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: metadata.name
+          value: apache
+      - equal:
+          path: spec.ports[0].port
+          value: 80
+
+  - it: el Apache recibe su puerto por APACHE_PORT
+    template: templates/apache.yaml
+    documentIndex: 0
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: APACHE_PORT, value: "80" }
+
+  - it: el puerto del Apache sale de values.yaml
+    template: templates/apache.yaml
+    set:
+      apache.puerto: 8081
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content: { name: APACHE_PORT, value: "8081" }
+        documentIndex: 0
+      - equal:
+          path: spec.ports[0].port
+          value: 8081
+        documentIndex: 1

@@ -1,0 +1,65 @@
+{{- if .Values.javaApi.habilitado }}
+{{- $v := .Values.javaApi }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java-api
+  labels:
+    {{- include "proxy-cache.etiquetas" . | nindent 4 }}
+    app.kubernetes.io/name: java-api
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: java-api
+  template:
+    metadata:
+      labels:
+        {{- include "proxy-cache.etiquetas" . | nindent 8 }}
+        app.kubernetes.io/name: java-api
+    spec:
+      {{- include "proxy-cache.pullSecrets" . | nindent 6 }}
+      containers:
+        - name: java-api
+          image: {{ include "proxy-cache.imagen" (dict "raiz" . "nombre" $v.imagen) }}
+          imagePullPolicy: {{ .Values.imagenes.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $v.puerto }}
+          env:
+            - name: JAVA_API_PORT
+              value: {{ $v.puerto | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          {{- with $v.recursos }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.nombreServicio }}
+  labels:
+    {{- include "proxy-cache.etiquetas" . | nindent 4 }}
+    app.kubernetes.io/name: java-api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: java-api
+  ports:
+    - name: http
+      port: {{ $v.puerto }}
+      targetPort: http
+{{- end }}

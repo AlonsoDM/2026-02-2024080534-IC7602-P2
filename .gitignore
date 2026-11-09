@@ -1,0 +1,53 @@
+# Compilación de los componentes en C
+build/
+*.o
+*.a
+*.so
+
+# Java
+target/
+
+# Node, Cloudflare y Vite
+node_modules/
+.wrangler/
+.dev.vars
+src/ui/dist/
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
+
+# Certificados generados para SSL termination
+.certs/
+
+# Documentación compilada (se regenera con just docs)
+docs/pdf/*.pdf
+
+# Entrega
+dist/
+*.tar.gz
+
+# Terraform: estado, proveedores, variables locales y el kubeconfig que deja la EC2
+terraform/**/.terraform/
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+terraform/kubeconfig
+
+# Helm
+helm/**/charts/
+helm/**/*.tgz
+
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Trabajo local
+scratch/
+.env
+.env.*
+!.env.example

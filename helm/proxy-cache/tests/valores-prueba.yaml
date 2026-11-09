@@ -1,0 +1,14 @@
+# Valores mínimos para renderizar el chart en las pruebas
+nodeApi:
+  url: https://api.ejemplo.test
+llaves:
+  interceptor: llave-interceptor
+  cache: llave-cache
+cache:
+  uiLoginUrl: https://ui.ejemplo.test/login
+  ca:
+    cert: CERTIFICADO
+    llave: LLAVE
+interceptor:
+  externalIPs:
+    - 10.20.1.10

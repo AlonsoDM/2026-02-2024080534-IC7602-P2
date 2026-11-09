@@ -1,0 +1,54 @@
+#!/bin/bash
+# user_data de la EC2: instala k3s sin pasos manuales y publica el kubeconfig en SSM.
+# Lo arma Terraform con templatefile; las variables con signo de dólar y llaves las reemplaza Terraform.
+set -euo pipefail
+exec > >(tee -a /var/log/p2-arranque.log) 2>&1
+
+echo "Arranque del nodo $(date -Is)"
+
+# 1. Las IP secundarias de las zonas. amazon-ec2-net-utils las agrega solo al arrancar;
+#    si alguna no aparece en un minuto se agrega a mano a la interfaz de la ruta por defecto.
+interfaz=$(ip route show default | awk '{print $5; exit}')
+for ip in ${ips_secundarias}; do
+    for _ in $(seq 1 30); do
+        ip -4 addr show dev "$interfaz" | grep -q "inet $ip/" && break
+        sleep 2
+    done
+    if ! ip -4 addr show dev "$interfaz" | grep -q "inet $ip/"; then
+        echo "Agregando $ip a $interfaz"
+        ip addr add "$ip/${prefijo}" dev "$interfaz"
+    fi
+done
+
+# 2. La Elastic IP se asocia unos segundos después de crear la EC2; hasta entonces no hay salida a Internet.
+until curl -sfL --max-time 20 https://get.k3s.io -o /tmp/instalar-k3s.sh; do
+    echo "Esperando salida a Internet"
+    sleep 5
+done
+
+# 3. k3s sin Traefik ni ServiceLB: los puertos 80, 443 y 53 los toman los Service de cada
+#    caché y del Interceptor con externalIPs, y ServiceLB los ocuparía en todas las IP del nodo.
+#    --tls-san agrega la Elastic IP al certificado del API para que kubectl la acepte desde afuera.
+INSTALL_K3S_VERSION='${version_k3s}' \
+INSTALL_K3S_SKIP_SELINUX_RPM=true \
+INSTALL_K3S_EXEC="server --disable traefik --disable servicelb --tls-san ${ip_publica} --write-kubeconfig-mode 600" \
+    sh /tmp/instalar-k3s.sh
+
+until k3s kubectl get nodes 2>/dev/null | grep -q ' Ready'; do
+    echo "Esperando que el nodo quede Ready"
+    sleep 5
+done
+
+# 4. kubeconfig apuntando a la Elastic IP, con un nombre propio en lugar de "default"
+sed -e 's#https://127.0.0.1:6443#https://${ip_publica}:6443#' \
+    -e 's#: default$#: ${contexto}#' \
+    /etc/rancher/k3s/k3s.yaml > /root/kubeconfig-publico
+chmod 600 /root/kubeconfig-publico
+
+until aws ssm put-parameter --region '${region}' --name '${parametro}' --type SecureString \
+        --tier Intelligent-Tiering --overwrite --value file:///root/kubeconfig-publico >/dev/null; do
+    echo "Reintentando publicar el kubeconfig"
+    sleep 5
+done
+
+echo "Nodo listo $(date -Is)"

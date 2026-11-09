@@ -1,0 +1,89 @@
+# Valores del chart. Nada de esto está quemado en las imágenes: cada componente lo recibe por
+# variables de entorno. Las llaves y la CA van en Secrets y se pasan al instalar, nunca en este archivo.
+
+imagenes:
+  # Registro donde están las imágenes, por ejemplo 123456789012.dkr.ecr.us-east-1.amazonaws.com/ic7602-p2.
+  # Vacío usa solo el nombre, para imágenes cargadas a mano en el nodo
+  registro: ""
+  etiqueta: latest
+  pullPolicy: IfNotPresent
+  # Secrets docker-registry para bajar del registro, por ejemplo [{ name: ecr }]
+  pullSecrets: []
+
+# REST API Node.js, de donde el Interceptor y las cachés sacan su configuración
+nodeApi:
+  url: ""
+  timeoutSeconds: 5
+
+# Llaves de componente hacia el REST API Node.js (alcances interceptor y cache).
+# Se pasan con --set-string, o se apunta a un Secret ya creado con las llaves "interceptor" y "cache"
+llaves:
+  secretoExistente: ""
+  interceptor: ""
+  cache: ""
+
+interceptor:
+  habilitado: true
+  imagen: interceptor
+  replicas: 1
+  # El contenedor corre sin root y no puede abrir el 53; el Service traduce 53 a este puerto
+  puerto: 5300
+  puertoServicio: 53
+  # IP privada del nodo donde escucha el DNS (salida ip_privada_interceptor de Terraform)
+  externalIPs: []
+  upstreamDns: 8.8.8.8
+  upstreamDnsPort: 53
+  upstreamTimeoutSeconds: 3
+  dnsTtlSeconds: 60
+  recursos: {}
+
+cache:
+  imagen: zonal-cache
+  # Igual que el Interceptor: el contenedor escucha en puertos altos y el Service expone 80 y 443
+  puerto: 8080
+  puertoTls: 8443
+  puertoServicio: 80
+  puertoServicioTls: 443
+  configRefreshSeconds: 30
+  # Lo usa el purgado de expirados de T-06; las versiones que no lo leen lo ignoran
+  purgeIntervalSeconds: 60
+  # Formulario de la UI para las URLs con usuario y contraseña
+  uiLoginUrl: ""
+  directorio: /var/cache/zonal-cache
+  # Límite del emptyDir de cada caché. Tiene que ser mayor que la suma de cache_size_bytes de las URLs
+  tamanoDisco: 1Gi
+  # CA local de scripts/generar-ca.sh. Se pasa con --set-file cache.ca.cert=.certs/rootCA.pem
+  # --set-file cache.ca.llave=.certs/rootCA-key.pem, o se apunta a un Secret con rootCA.pem y rootCA-key.pem
+  ca:
+    secretoExistente: ""
+    cert: ""
+    llave: ""
+  # Una caché por zona: su código y la IP privada secundaria que le dio Terraform (salida zonas)
+  zonas:
+    - codigo: CR
+      externalIP: 10.20.1.11
+    - codigo: US
+      externalIP: 10.20.1.12
+    - codigo: ES
+      externalIP: 10.20.1.13
+    - codigo: GB
+      externalIP: 10.20.1.14
+  recursos: {}
+
+javaApi:
+  habilitado: true
+  imagen: java-api
+  # Nombre y puerto fijos porque los orígenes de Supabase son http://java-api:8080
+  nombreServicio: java-api
+  puerto: 8080
+  replicas: 1
+  recursos: {}
+
+apache:
+  habilitado: true
+  imagen: apache
+  # Los orígenes de Supabase son http://apache:80
+  nombreServicio: apache
+  puerto: 80
+  replicas: 1
+  recursos: {}

@@ -1,0 +1,65 @@
+{{- if .Values.apache.habilitado }}
+{{- $v := .Values.apache }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apache
+  labels:
+    {{- include "proxy-cache.etiquetas" . | nindent 4 }}
+    app.kubernetes.io/name: apache
+spec:
+  replicas: {{ $v.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: apache
+  template:
+    metadata:
+      labels:
+        {{- include "proxy-cache.etiquetas" . | nindent 8 }}
+        app.kubernetes.io/name: apache
+    spec:
+      {{- include "proxy-cache.pullSecrets" . | nindent 6 }}
+      containers:
+        - name: apache
+          image: {{ include "proxy-cache.imagen" (dict "raiz" . "nombre" $v.imagen) }}
+          imagePullPolicy: {{ .Values.imagenes.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $v.puerto }}
+          env:
+            - name: APACHE_PORT
+              value: {{ $v.puerto | quote }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          {{- with $v.recursos }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $v.nombreServicio }}
+  labels:
+    {{- include "proxy-cache.etiquetas" . | nindent 4 }}
+    app.kubernetes.io/name: apache
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: apache
+  ports:
+    - name: http
+      port: {{ $v.puerto }}
+      targetPort: http
+{{- end }}

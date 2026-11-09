@@ -1,0 +1,133 @@
+{{- /* Una caché por zona: la misma imagen, cada una con su CACHE_ZONE, su disco y su IP */ -}}
+{{- $v := .Values.cache }}
+{{- $vistas := dict }}
+{{- range $zona := $v.zonas }}
+{{- $codigo := required "Cada zona necesita codigo" $zona.codigo }}
+{{- if not (regexMatch "^[A-Z]{2}$" $codigo) }}
+{{- fail (printf "El código de zona debe ser de dos letras en mayúscula, se recibió %q" $codigo) }}
+{{- end }}
+{{- if hasKey $vistas $codigo }}
+{{- fail (printf "La zona %s está repetida en cache.zonas" $codigo) }}
+{{- end }}
+{{- $_ := set $vistas $codigo true }}
+{{- $nombre := printf "cache-%s" (lower $codigo) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $nombre }}
+  labels:
+    {{- include "proxy-cache.etiquetas" $ | nindent 4 }}
+    app.kubernetes.io/name: zonal-cache
+    proxy-cache/zona: {{ $codigo }}
+spec:
+  # Una réplica por zona: el disco y el índice de cada caché son propios del pod
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/name: zonal-cache
+      proxy-cache/zona: {{ $codigo }}
+  template:
+    metadata:
+      labels:
+        {{- include "proxy-cache.etiquetas" $ | nindent 8 }}
+        app.kubernetes.io/name: zonal-cache
+        proxy-cache/zona: {{ $codigo }}
+      annotations:
+        checksum/secretos: {{ toJson (list $.Values.llaves $.Values.cache.ca) | sha256sum }}
+    spec:
+      {{- include "proxy-cache.pullSecrets" $ | nindent 6 }}
+      containers:
+        - name: zonal-cache
+          image: {{ include "proxy-cache.imagen" (dict "raiz" $ "nombre" $v.imagen) }}
+          imagePullPolicy: {{ $.Values.imagenes.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $v.puerto }}
+            - name: https
+              containerPort: {{ $v.puertoTls }}
+          env:
+            - name: CACHE_ZONE
+              value: {{ $codigo | quote }}
+            - name: CACHE_PORT
+              value: {{ $v.puerto | quote }}
+            - name: CACHE_TLS_PORT
+              value: {{ $v.puertoTls | quote }}
+            - name: CACHE_DIR
+              value: {{ $v.directorio | quote }}
+            - name: CONFIG_REFRESH_SECONDS
+              value: {{ $v.configRefreshSeconds | quote }}
+            - name: PURGE_INTERVAL_SECONDS
+              value: {{ $v.purgeIntervalSeconds | quote }}
+            - name: UI_LOGIN_URL
+              value: {{ required "Falta cache.uiLoginUrl, el formulario de login de la UI" $v.uiLoginUrl | quote }}
+            - name: TLS_CA_CERT_FILE
+              value: /etc/zonal-cache/rootCA.pem
+            - name: TLS_CA_KEY_FILE
+              value: /etc/zonal-cache/rootCA-key.pem
+            - name: NODE_API_URL
+              value: {{ include "proxy-cache.nodeApiUrl" $ | quote }}
+            - name: NODE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "proxy-cache.secretoLlaves" $ }}
+                  key: cache
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - name: disco
+              mountPath: {{ $v.directorio }}
+            - name: ca
+              mountPath: /etc/zonal-cache
+              readOnly: true
+          {{- with $v.recursos }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        # La caché no sobrevive a un reinicio del pod: el enunciado no pide persistencia
+        - name: disco
+          emptyDir:
+            sizeLimit: {{ $v.tamanoDisco }}
+        - name: ca
+          secret:
+            secretName: {{ include "proxy-cache.secretoCa" $ }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $nombre }}
+  labels:
+    {{- include "proxy-cache.etiquetas" $ | nindent 4 }}
+    app.kubernetes.io/name: zonal-cache
+    proxy-cache/zona: {{ $codigo }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/name: zonal-cache
+    proxy-cache/zona: {{ $codigo }}
+  {{- with $zona.externalIP }}
+  # IP privada secundaria de la zona; AWS le traduce su Elastic IP
+  externalIPs:
+    - {{ . }}
+  externalTrafficPolicy: Local
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ $v.puertoServicio }}
+      targetPort: http
+    - name: https
+      port: {{ $v.puertoServicioTls }}
+      targetPort: https
+{{- end }}
